@@ -9,8 +9,8 @@ public class UnityOutlineFX : MonoBehaviour
     #region public vars
 
     [Header("Outline Settings")]
-	[SerializeField]
-	public Color OutlineColor =  new Color(1,0,0,.05f); // alpha = fill alpha; does not effect outline alpha;
+    [SerializeField]
+    public Color OutlineColor =  new Color(1,0.5f,0,0); // alpha = fill alpha; does not effect outline alpha;
 
     public CameraEvent BufferDrawEvent = CameraEvent.BeforeImageEffects;
 
@@ -39,6 +39,32 @@ public class UnityOutlineFX : MonoBehaviour
 
     #endregion
 
+    public void Init()
+    {
+        OutlineColor =  new Color(1,0.5f,0,0.05f);
+        Downsample = 1;
+        BlurSize = 1f;
+        _objectRenderers = new List<List<Renderer>>();
+
+        _commandBuffer = new CommandBuffer();
+        _commandBuffer.name = "UnityOutlineFX Command Buffer";
+
+        _depthRTID = Shader.PropertyToID("_DepthRT");
+        _outlineRTID = Shader.PropertyToID("_OutlineRT");
+        _blurredRTID = Shader.PropertyToID("_BlurredRT");
+        _temporaryRTID = Shader.PropertyToID("_TemporaryRT");
+        _idRTID = Shader.PropertyToID("_idRT");
+        
+        _RTWidth = Screen.width;
+        _RTHeight = Screen.height;
+
+        _outlineMaterial = new Material(Shader.Find("Hidden/UnityOutline"));
+
+        _camera = GetComponent<Camera>();
+        _camera.depthTextureMode = DepthTextureMode.Depth;
+        _camera.AddCommandBuffer(BufferDrawEvent, _commandBuffer);
+    }
+
     public void AddRenderers(List<Renderer> renderers)
     {
         _objectRenderers.Add(renderers);      
@@ -57,28 +83,19 @@ public class UnityOutlineFX : MonoBehaviour
         RecreateCommandBuffer();
     }
 
-    private void Awake()
-	{
-        _objectRenderers = new List<List<Renderer>>();
+//    private void Awake()
+//	{
+//        
+//	}
 
-        _commandBuffer = new CommandBuffer();
-        _commandBuffer.name = "UnityOutlineFX Command Buffer";
-
-		_depthRTID = Shader.PropertyToID("_DepthRT");
-        _outlineRTID = Shader.PropertyToID("_OutlineRT");
-        _blurredRTID = Shader.PropertyToID("_BlurredRT");
-        _temporaryRTID = Shader.PropertyToID("_TemporaryRT");
-        _idRTID = Shader.PropertyToID("_idRT");
-        
-        _RTWidth = Screen.width;
-        _RTHeight = Screen.height;
-
-        _outlineMaterial = new Material(Shader.Find("Hidden/UnityOutline"));
-
-        _camera = GetComponent<Camera>();
-        _camera.depthTextureMode = DepthTextureMode.Depth;
-        _camera.AddCommandBuffer(BufferDrawEvent, _commandBuffer);
-	}
+    private void Update()
+    {
+        if (_RTWidth != Screen.width || _RTHeight != Screen.height)
+        {
+            _RTWidth = Screen.width;
+            _RTHeight = Screen.height;
+        }
+    }
 
     private void RecreateCommandBuffer()
     {
@@ -89,7 +106,8 @@ public class UnityOutlineFX : MonoBehaviour
 
         // initialization
         _commandBuffer.GetTemporaryRT(_depthRTID, _RTWidth, _RTHeight, 0, FilterMode.Bilinear, RenderTextureFormat.ARGB32);
-        _commandBuffer.SetRenderTarget(_depthRTID, BuiltinRenderTextureType.CurrentActive);
+//        _commandBuffer.SetRenderTarget(_depthRTID, BuiltinRenderTextureType.CurrentActive);
+       _commandBuffer.SetRenderTarget(_depthRTID); 
         _commandBuffer.ClearRenderTarget(false, true, Color.clear);
 
         // render selected objects into a mask buffer, with different colors for visible vs occluded ones 
@@ -101,8 +119,13 @@ public class UnityOutlineFX : MonoBehaviour
     
             foreach (var render in collection)
             {
-                _commandBuffer.DrawRenderer(render, _outlineMaterial, 0, 1);
-                _commandBuffer.DrawRenderer(render, _outlineMaterial, 0, 0);
+                for(var i= 0; i<render.sharedMaterials.Length; i++)
+                {
+                    _commandBuffer.DrawRenderer(render, _outlineMaterial, i, 1);
+                    _commandBuffer.DrawRenderer(render, _outlineMaterial, i, 0);
+                }
+                //_commandBuffer.DrawRenderer(render, _outlineMaterial, 0, 1);
+                //_commandBuffer.DrawRenderer(render, _outlineMaterial, 0, 0);
             }
         }
         
@@ -126,7 +149,7 @@ public class UnityOutlineFX : MonoBehaviour
 
 
         // final overlay
-        _commandBuffer.SetGlobalColor("_OutlineColor", OutlineColor);
+        _commandBuffer.SetGlobalColor("_OutlineColor1", OutlineColor);
         _commandBuffer.Blit(_blurredRTID,BuiltinRenderTextureType.CameraTarget, _outlineMaterial, 4);
 
         // release tempRTs

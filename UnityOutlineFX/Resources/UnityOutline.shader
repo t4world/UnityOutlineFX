@@ -50,7 +50,7 @@ Shader "Hidden/UnityOutline"
             CGPROGRAM
             #pragma vertex vert
             #pragma fragment frag
-            #pragma target 3.0
+            #pragma target 2.0
  
             float _ObjectId;
  
@@ -161,7 +161,7 @@ Shader "Hidden/UnityOutline"
  
             half4 fragment(Varying i) : SV_Target
             {              
-                float4 currentTexel = tex2D(_MainTex, i.uv);
+                half4 currentTexel = tex2D(_MainTex, i.uv);
                 if (currentTexel.r == 0)
                     return currentTexel;
  
@@ -171,7 +171,8 @@ Shader "Hidden/UnityOutline"
                 // edge.
                 for (int tap = 0; tap < 8; ++tap)
                 {
-                    float id = tex2D(_MainTex, i.uv + (kOffsets[tap] * _MainTex_TexelSize.xy)).r;
+                    half id = tex2D(_MainTex, i.uv + (kOffsets[tap] * _MainTex_TexelSize.xy)).r;
+                    //float id = tex2Dlod(_MainTex,float4(kOffsets[tap] * _MainTex_TexelSize.xy + i.uv,0,1)).r;
                     if (id != 0 && id - currentTexel.r != 0)
                     {
                         currentTexel.a = 0;
@@ -194,33 +195,38 @@ Shader "Hidden/UnityOutline"
             CGPROGRAM
             #pragma vertex vertex
             #pragma fragment fragment
-            #pragma target 3.0
+            #pragma target 2.0
             #include "UnityCG.cginc"
  
             sampler2D _MainTex;
             float4 _MainTex_TexelSize;
-            half4 _OutlineColor;
+            half4 _OutlineColor1;
  
             half4 fragment(Varying i) : SV_Target
             {
                 half4 col = tex2D(_MainTex, i.uv);
                
-                bool isSelected = col.a > 0.9;
-                bool inFront = col.g > 0.0;
-				bool backMask = col.r == 0.0;
+                bool isSelected = col.a > 0.9f;
+                bool inFront = col.g > 0.0f;
+				bool backMask = col.r == 0.0f;
 
                 float alpha = saturate(col.b * 10);
+                //return float4(col.a,0,0,alpha);
                 if (isSelected)
                 {
                     // UnityOutline color alpha controls how much tint the whole object gets
-                    alpha = _OutlineColor.a;
+                    alpha = _OutlineColor1.a;
                     if (any(i.uv - _MainTex_TexelSize.xy*2 < 0) || any(i.uv + _MainTex_TexelSize.xy*2 > 1))
-                        alpha = 1;
+                    {
+                       alpha = 1;
+                    }
                 }
 				
                 if (!inFront)
                 {
                     alpha *= 0.3;
+                    if (isSelected) // no tinting at all for occluded selection
+                        alpha = 0;
                 }
 
                 if (backMask && isSelected)
@@ -228,7 +234,7 @@ Shader "Hidden/UnityOutline"
                     alpha = 0;
 				}
 
-                float4 UnityOutlineColor = float4(_OutlineColor.rgb,alpha);
+                float4 UnityOutlineColor = float4(_OutlineColor1.rgb,alpha);
                 return UnityOutlineColor;
             }
             ENDCG
